@@ -1,15 +1,14 @@
 const http = require("http");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 
 const PORT = process.env.PORT || 3000;
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash-lite"
+const groq = new Groq({
+  apiKey: GROQ_API_KEY
 });
+
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -22,47 +21,24 @@ const CORS_HEADERS = {
 const SYSTEM_PROMPT = `
 You are AAMUSTED AI Assistant for Akenten Appiah-Menka University of Skills Training and Entrepreneurial Development (AAMUSTED), Ghana.
 
-Your role is to assist students, staff and visitors with accurate and friendly information.
+Help students with:
+- Admissions
+- Registration
+- Academic information
+- Programmes
+- Campus services
+- Student support
 
-AAMUSTED INFORMATION:
-- Full name: Akenten Appiah-Menka University of Skills Training and Entrepreneurial Development.
-- Location: Ghana.
-- Campuses: Kumasi and Mampong.
-- Website: www.aamusted.edu.gh.
+AAMUSTED:
+- Campuses: Kumasi and Mampong
+- Website: www.aamusted.edu.gh
 
-PROGRAMMES INCLUDE:
-- Information Technology Education
-- Business Education
-- Fashion Design and Textiles
-- Graphic Design
-- Building Technology
-- Electrical/Electronic Engineering Technology
-- Mechanical Engineering Technology
-- Hospitality and Tourism Management
+Programmes include:
+Information Technology Education, Business Education, Fashion Design and Textiles, Graphic Design, Building Technology, Electrical/Electronic Engineering Technology, Mechanical Engineering Technology.
 
-STUDENT SERVICES:
-- Library services
-- ICT Centre
-- Health Centre
-- Sports activities
-- Cafeteria
-- Student support services
-
-REGISTRATION:
-Students should use the university student portal for registration.
-New students complete registration after admission.
-
-GRADING:
-A: 80-100
-B: 70-79
-C: 60-69
-D: 50-59
-F: Below 50
-
-Always answer politely.
-For information you don't know, advise the student to contact the appropriate university office.
-
-You can also answer normal general knowledge questions.
+Be friendly and helpful.
+If you don't know something, say so.
+You can also answer general knowledge questions.
 `;
 
 
@@ -81,7 +57,7 @@ const server = http.createServer((req, res) => {
 
     res.end(JSON.stringify({
       status: "AAMUSTED AI Backend Running",
-      geminiKeyLoaded: GEMINI_API_KEY.length > 10
+      groqKeyLoaded: GROQ_API_KEY.length > 10
     }));
 
     return;
@@ -103,57 +79,46 @@ const server = http.createServer((req, res) => {
 
         const data = JSON.parse(body);
 
-        let userMessage = "";
+        let messages = data.messages || [];
+
+        const completion = await groq.chat.completions.create({
+
+          model: "llama-3.1-8b-instant",
+
+          messages: [
+            {
+              role: "system",
+              content: SYSTEM_PROMPT
+            },
+            ...messages
+          ],
+
+          temperature: 0.7,
+          max_tokens: 800
+
+        });
 
 
-        if (Array.isArray(data.messages)) {
-
-          const lastMessage =
-            data.messages[data.messages.length - 1];
-
-          userMessage = lastMessage.content;
-
-        } 
-        
-        else if (data.message) {
-
-          userMessage = data.message;
-
-        }
-
-
-        console.log("User question:", userMessage);
-
-
-        const result = await model.generateContent(
-          SYSTEM_PROMPT +
-          "\n\nStudent Question:\n" +
-          userMessage
-        );
-
-
-        const reply = result.response.text();
-
-
-        console.log("Gemini reply:", reply);
+        const reply =
+          completion.choices[0].message.content;
 
 
         res.writeHead(200, CORS_HEADERS);
 
         res.end(JSON.stringify({
-          reply: reply
+          reply
         }));
 
 
       } catch (error) {
 
-        console.error("Gemini Error:", error);
+        console.error("Groq Error:", error.message);
 
 
         res.writeHead(500, CORS_HEADERS);
 
         res.end(JSON.stringify({
-          error: "Gemini failed: " + error.message
+          error: error.message
         }));
 
       }
@@ -167,7 +132,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(404, CORS_HEADERS);
 
   res.end(JSON.stringify({
-    error: "Route not found"
+    error: "Not Found"
   }));
 
 });
@@ -176,12 +141,12 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
 
   console.log(
-    `AAMUSTED AI Backend running on port ${PORT}`
+    "AAMUSTED AI Backend running on port " + PORT
   );
 
   console.log(
-    "Gemini key loaded:",
-    GEMINI_API_KEY.length > 10
+    "Groq key loaded:",
+    GROQ_API_KEY.length > 10
   );
 
 });
