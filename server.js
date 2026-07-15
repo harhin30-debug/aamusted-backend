@@ -30,7 +30,7 @@ PROGRAMMES: Information Technology Education, Fashion Design and Textiles, Graph
 
 REGISTRATION: New student registration happens in September. Required documents: admission letter, WASSCE results, national ID, passport photo. Portal: students.aamusted.edu.gh. Late registration attracts a penalty fee. Semester 1: September to January. Semester 2: February to June.
 
-CAMPUS SERVICES: Library Mon-Fri 8am-8pm, Sat 9am-4pm. Health Centre Mon-Fri 8am-5pm. Sports Complex, ICT Centre 7am-9pm weekdays, Cafeteria 6:30am-8pm daily. ATM on campus.
+CAMPUS SERVICES: Library Mon-Fri 8am-8pm, Sat 9am-4pm (Kumasi Main Library is opposite the Reynolds Okine Building, ROB). Health Centre Mon-Fri 8am-5pm. Sports Complex, ICT Centre 7am-9pm weekdays, Cafeteria 6:30am-8pm daily. ATM on campus.
 
 GRADING: A 80-100, B 70-79, C 60-69, D 50-59, F below 50. Exams in January and June. Results within 4 weeks.
 
@@ -55,20 +55,23 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST' && req.url === '/chat') {
+    const receivedAt = new Date().toISOString();
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
       try {
         const { messages } = JSON.parse(body);
+        console.log(`[${receivedAt}] /chat request received — ${Array.isArray(messages) ? messages.length : 0} message(s)`);
 
         if (!ANTHROPIC_API_KEY || ANTHROPIC_API_KEY.length < 10) {
+          console.log(`[${receivedAt}] REJECTED — API key not configured`);
           res.writeHead(500, CORS_HEADERS);
           res.end(JSON.stringify({ error: 'API key not configured on server.' }));
           return;
         }
 
         const payload = JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-5',
           max_tokens: 800,
           system: KB,
           messages
@@ -90,16 +93,20 @@ const server = http.createServer((req, res) => {
           let data = '';
           apiRes.on('data', chunk => { data += chunk; });
           apiRes.on('end', () => {
+            console.log(`[${receivedAt}] Anthropic API responded with status ${apiRes.statusCode}`);
             try {
               const parsed = JSON.parse(data);
               if (parsed.error) {
+                console.log(`[${receivedAt}] Anthropic API error: ${parsed.error.message}`);
                 res.writeHead(500, CORS_HEADERS);
                 res.end(JSON.stringify({ error: parsed.error.message }));
               } else {
+                console.log(`[${receivedAt}] SUCCESS — reply sent to client`);
                 res.writeHead(200, CORS_HEADERS);
                 res.end(JSON.stringify({ reply: parsed.content[0].text }));
               }
             } catch (e) {
+              console.log(`[${receivedAt}] FAILED to parse Anthropic response: ${e.message}. Raw: ${data.slice(0,300)}`);
               res.writeHead(500, CORS_HEADERS);
               res.end(JSON.stringify({ error: 'Failed to parse AI response' }));
             }
@@ -107,14 +114,21 @@ const server = http.createServer((req, res) => {
         });
 
         apiReq.on('error', e => {
+          console.log(`[${receivedAt}] NETWORK ERROR reaching Anthropic: ${e.message}`);
           res.writeHead(500, CORS_HEADERS);
           res.end(JSON.stringify({ error: 'Could not reach AI server: ' + e.message }));
+        });
+
+        apiReq.setTimeout(25000, () => {
+          console.log(`[${receivedAt}] TIMEOUT reaching Anthropic after 25s`);
+          apiReq.destroy(new Error('Request to Anthropic API timed out'));
         });
 
         apiReq.write(payload);
         apiReq.end();
 
       } catch (e) {
+        console.log(`[${receivedAt}] INVALID REQUEST: ${e.message}`);
         res.writeHead(400, CORS_HEADERS);
         res.end(JSON.stringify({ error: 'Invalid request' }));
       }
@@ -130,4 +144,4 @@ server.listen(PORT, () => {
   console.log(`AAMUSTED AI backend running on port ${PORT}`);
   console.log(`API key loaded: ${ANTHROPIC_API_KEY.length > 10 ? 'YES' : 'NO - key missing!'}`);
 });
-            
+          
