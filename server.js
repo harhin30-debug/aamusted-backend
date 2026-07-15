@@ -1,147 +1,268 @@
-const http = require('http');
-const https = require('https');
+const http = require("http");
+const https = require("https");
 
 const PORT = process.env.PORT || 3000;
 
-// Accept any of these variable names
-const ANTHROPIC_API_KEY = 
-  process.env.ANTHROPIC_API_KEY || 
-  process.env.Anthropic_key ||
-  process.env.ANTHROPIC_KEY ||
-  process.env.anthropic_key ||
-  process.env.API_KEY || '';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json'
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Content-Type": "application/json"
 };
 
-const KB = `You are the official AAMUSTED AI Assistant for Akenten Appiah-Menka University of Skills Training and Entrepreneurial Development (AAMUSTED), Ghana. You help students with friendly, accurate, specific answers.
+const KB = `
+You are AAMUSTED AI Assistant for Akenten Appiah-Menka University of Skills Training and Entrepreneurial Development (AAMUSTED), Ghana.
+
+You help students with friendly and accurate answers.
 
 ABOUT AAMUSTED:
 - Full name: Akenten Appiah-Menka University of Skills Training and Entrepreneurial Development
-- Campuses: Kumasi (main) and Mampong
-- Type: Technical University, Ghana
+- Campuses: Kumasi and Mampong
 - Website: www.aamusted.edu.gh
 
-PROGRAMMES: Information Technology Education, Fashion Design and Textiles, Graphic Design, Building Technology, Electrical/Electronic Engineering Technology, Mechanical Engineering Technology, Hospitality and Tourism Management, Business Education.
+PROGRAMMES:
+Information Technology Education, Fashion Design and Textiles, Graphic Design, Building Technology, Electrical/Electronic Engineering Technology, Mechanical Engineering Technology, Hospitality and Tourism Management, Business Education.
 
-REGISTRATION: New student registration happens in September. Required documents: admission letter, WASSCE results, national ID, passport photo. Portal: students.aamusted.edu.gh. Late registration attracts a penalty fee. Semester 1: September to January. Semester 2: February to June.
+REGISTRATION:
+New students register mainly in September.
+Students should have admission letter, WASSCE results, national ID and passport photo.
+Student portal: students.aamusted.edu.gh
 
-CAMPUS SERVICES: Library Mon-Fri 8am-8pm, Sat 9am-4pm (Kumasi Main Library is opposite the Reynolds Okine Building, ROB). Health Centre Mon-Fri 8am-5pm. Sports Complex, ICT Centre 7am-9pm weekdays, Cafeteria 6:30am-8pm daily. ATM on campus.
+SEMESTERS:
+Semester 1: September to January.
+Semester 2: February to June.
 
-GRADING: A 80-100, B 70-79, C 60-69, D 50-59, F below 50. Exams in January and June. Results within 4 weeks.
+CAMPUS SERVICES:
+Library, ICT Centre, Health Centre, Sports Complex, Cafeteria and ATM services.
 
-CONTACTS: registrar@aamusted.edu.gh, admissions@aamusted.edu.gh, bursary@aamusted.edu.gh, deanofstudents@aamusted.edu.gh, ict@aamusted.edu.gh
+GRADING:
+A = 80-100
+B = 70-79
+C = 60-69
+D = 50-59
+F = Below 50
 
-Be warm, helpful, and conversational. If you do not know something, say so and direct the student to the right office.`;
+CONTACT:
+registrar@aamusted.edu.gh
+admissions@aamusted.edu.gh
+ict@aamusted.edu.gh
+
+Be polite, helpful and conversational.
+If you do not know an answer, advise the student to contact the appropriate university office.
+`;
+
+function callGemini(prompt, callback) {
+
+  const data = JSON.stringify({
+    contents: [
+      {
+        parts: [
+          {
+            text: KB + "\n\nStudent Question:\n" + prompt
+          }
+        ]
+      }
+    ]
+  });
+
+  const options = {
+    hostname: "generativelanguage.googleapis.com",
+    path:
+      "/v1beta/models/gemini-2.5-flash:generateContent?key=" +
+      GEMINI_API_KEY,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(data)
+    }
+  };
+
+
+  const request = https.request(options, response => {
+
+    let result = "";
+
+    response.on("data", chunk => {
+      result += chunk;
+    });
+
+
+    response.on("end", () => {
+
+      try {
+
+        const json = JSON.parse(result);
+
+        if (json.error) {
+          callback(null, json.error.message);
+          return;
+        }
+
+        const reply =
+          json.candidates[0].content.parts[0].text;
+
+        callback(reply, null);
+
+      } catch (error) {
+
+        callback(null, "Failed to read Gemini response");
+
+      }
+
+    });
+
+  });
+
+
+  request.on("error", error => {
+    callback(null, error.message);
+  });
+
+
+  request.write(data);
+  request.end();
+
+}
+
+
 
 const server = http.createServer((req, res) => {
-  if (req.method === 'OPTIONS') {
+
+
+  if (req.method === "OPTIONS") {
     res.writeHead(204, CORS_HEADERS);
     res.end();
     return;
   }
 
-  if (req.method === 'GET' && req.url === '/') {
+
+  if (req.method === "GET" && req.url === "/") {
+
     res.writeHead(200, CORS_HEADERS);
-    res.end(JSON.stringify({ 
-      status: 'AAMUSTED AI Backend is running',
-      keyLoaded: ANTHROPIC_API_KEY.length > 10
+
+    res.end(JSON.stringify({
+      status: "AAMUSTED AI Backend is running",
+      geminiKeyLoaded: GEMINI_API_KEY.length > 10
     }));
+
     return;
   }
 
-  if (req.method === 'POST' && req.url === '/chat') {
-    const receivedAt = new Date().toISOString();
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', () => {
-      try {
-        const { messages } = JSON.parse(body);
-        console.log(`[${receivedAt}] /chat request received — ${Array.isArray(messages) ? messages.length : 0} message(s)`);
 
-        if (!ANTHROPIC_API_KEY || ANTHROPIC_API_KEY.length < 10) {
-          console.log(`[${receivedAt}] REJECTED — API key not configured`);
+
+  if (req.method === "POST" && req.url === "/chat") {
+
+    let body = "";
+
+
+    req.on("data", chunk => {
+      body += chunk;
+    });
+
+
+    req.on("end", () => {
+
+
+      try {
+
+        const data = JSON.parse(body);
+
+        let message = "";
+
+
+        if (data.messages && Array.isArray(data.messages)) {
+
+          const last =
+            data.messages[data.messages.length - 1];
+
+          message = last.content || "";
+
+        }
+
+        else if (data.message) {
+
+          message = data.message;
+
+        }
+
+
+
+        if (!GEMINI_API_KEY) {
+
           res.writeHead(500, CORS_HEADERS);
-          res.end(JSON.stringify({ error: 'API key not configured on server.' }));
+
+          res.end(JSON.stringify({
+            error: "Gemini API key missing"
+          }));
+
           return;
         }
 
-        const payload = JSON.stringify({
-          model: 'claude-sonnet-5',
-          max_tokens: 800,
-          system: KB,
-          messages
+
+
+        callGemini(message, (reply, error) => {
+
+
+          res.writeHead(
+            error ? 500 : 200,
+            CORS_HEADERS
+          );
+
+
+          res.end(JSON.stringify({
+
+            reply: error || reply
+
+          }));
+
+
         });
 
-        const options = {
-          hostname: 'api.anthropic.com',
-          path: '/v1/messages',
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-            'Content-Length': Buffer.byteLength(payload)
-          }
-        };
 
-        const apiReq = https.request(options, apiRes => {
-          let data = '';
-          apiRes.on('data', chunk => { data += chunk; });
-          apiRes.on('end', () => {
-            console.log(`[${receivedAt}] Anthropic API responded with status ${apiRes.statusCode}`);
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.error) {
-                console.log(`[${receivedAt}] Anthropic API error: ${parsed.error.message}`);
-                res.writeHead(500, CORS_HEADERS);
-                res.end(JSON.stringify({ error: parsed.error.message }));
-              } else {
-                console.log(`[${receivedAt}] SUCCESS — reply sent to client`);
-                res.writeHead(200, CORS_HEADERS);
-                res.end(JSON.stringify({ reply: parsed.content[0].text }));
-              }
-            } catch (e) {
-              console.log(`[${receivedAt}] FAILED to parse Anthropic response: ${e.message}. Raw: ${data.slice(0,300)}`);
-              res.writeHead(500, CORS_HEADERS);
-              res.end(JSON.stringify({ error: 'Failed to parse AI response' }));
-            }
-          });
-        });
 
-        apiReq.on('error', e => {
-          console.log(`[${receivedAt}] NETWORK ERROR reaching Anthropic: ${e.message}`);
-          res.writeHead(500, CORS_HEADERS);
-          res.end(JSON.stringify({ error: 'Could not reach AI server: ' + e.message }));
-        });
-
-        apiReq.setTimeout(25000, () => {
-          console.log(`[${receivedAt}] TIMEOUT reaching Anthropic after 25s`);
-          apiReq.destroy(new Error('Request to Anthropic API timed out'));
-        });
-
-        apiReq.write(payload);
-        apiReq.end();
-
-      } catch (e) {
-        console.log(`[${receivedAt}] INVALID REQUEST: ${e.message}`);
-        res.writeHead(400, CORS_HEADERS);
-        res.end(JSON.stringify({ error: 'Invalid request' }));
       }
+
+      catch(error) {
+
+        res.writeHead(400, CORS_HEADERS);
+
+        res.end(JSON.stringify({
+          error: "Invalid request"
+        }));
+
+      }
+
+
     });
+
+
     return;
+
   }
 
+
+
   res.writeHead(404, CORS_HEADERS);
-  res.end(JSON.stringify({ error: 'Not found' }));
+
+  res.end(JSON.stringify({
+    error: "Not found"
+  }));
+
 });
 
+
+
 server.listen(PORT, () => {
-  console.log(`AAMUSTED AI backend running on port ${PORT}`);
-  console.log(`API key loaded: ${ANTHROPIC_API_KEY.length > 10 ? 'YES' : 'NO - key missing!'}`);
+
+  console.log(
+    "AAMUSTED AI Backend running on port " + PORT
+  );
+
+  console.log(
+    "Gemini key loaded:",
+    GEMINI_API_KEY.length > 10
+  );
+
 });
-          
