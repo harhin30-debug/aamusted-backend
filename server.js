@@ -19,7 +19,7 @@ const CORS_HEADERS = {
 
 
 const SYSTEM_PROMPT = `
-You are AAMUSTED AI Assistant for Akenten Appiah-Menka University of Skills Training and Entrepreneurial Development (AAMUSTED), Ghana.
+You are USTED AI Assistant for Akenten Appiah-Menka University of Skills Training and Entrepreneurial Development (USTED), Ghana.
 
 Help students with:
 - Admissions
@@ -29,7 +29,7 @@ Help students with:
 - Campus services
 - Student support
 
-AAMUSTED:
+USTED:
 - Campuses: Kumasi and Mampong
 - Website: www.aamusted.edu.gh
 
@@ -56,7 +56,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, CORS_HEADERS);
 
     res.end(JSON.stringify({
-      status: "AAMUSTED AI Backend Running",
+      status: "USTED AI Backend Running",
       groqKeyLoaded: GROQ_API_KEY.length > 10
     }));
 
@@ -141,7 +141,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
 
   console.log(
-    "AAMUSTED AI Backend running on port " + PORT
+    "USTED AI Backend running on port " + PORT
   );
 
   console.log(
