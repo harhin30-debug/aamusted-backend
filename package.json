@@ -1,7 +1,7 @@
 {
-  "name": "aamusted-backend",
+  "name": "usted-backend",
   "version": "1.0.0",
-  "description": "AAMUSTED AI Chatbot Backend powered by Groq",
+  "description": "USTED AI Chatbot Backend powered by Groq",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
